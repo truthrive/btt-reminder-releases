@@ -8,12 +8,12 @@
     <item>
       <title>Version 1.0.7</title>
       <sparkle:releaseNotesLink>https://raw.githubusercontent.com/truthrive/btt-reminder-releases/main/release-notes-1.0.7.html</sparkle:releaseNotesLink>
-      <pubDate>Sun, 16 Aug 2026 15:14:44 +0000</pubDate>
+      <pubDate>Sun, 16 Aug 2026 15:33:30 +0000</pubDate>
       <enclosure
         url="https://github.com/truthrive/btt-reminder-releases/releases/download/v1.0.7/BTT-Reminder-1.0.7.zip"
         sparkle:version="8"
         sparkle:shortVersionString="1.0.7"
-        sparkle:edSignature="O0cUuTXQQhtNAxsgdkBPbwE2InLgWosNLrbDhE22LdJjxwwKvZQ027a/bBH/rOfm91Ni417LskJnChtw96JoDQ=="
+        sparkle:edSignature="+mccqYxeV/mLc1NGoOMUUBG3ucawULcAXuQYRHO1Lm6j3YG1rgSrX66ohE63/qFmIsFiWF87VExv9PjyLy2qBg=="
         length="2846813"
         type="application/octet-stream" />
     </item>
