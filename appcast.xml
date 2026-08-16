@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>BTT Reminder Updates</title>
+    <link>https://github.com/truthrive/btt-reminder-releases</link>
+    <description>Most recent updates for BTT Reminder.</description>
+    <language>en</language>
+    <item>
+      <title>Version 1.0.0</title>
+      <sparkle:releaseNotesLink>https://raw.githubusercontent.com/truthrive/btt-reminder-releases/main/release-notes-1.0.0.html</sparkle:releaseNotesLink>
+      <pubDate>Sun, 16 Aug 2026 07:47:56 +0000</pubDate>
+      <enclosure
+        url="https://github.com/truthrive/btt-reminder-releases/releases/download/v1.0.0/BTT-Reminder-1.0.0.zip"
+        sparkle:version="1"
+        sparkle:shortVersionString="1.0.0"
+        sparkle:edSignature="QIS3pzYcOmE2gb7GyExVR0a/i6fH5UeNHw6djRVqQSikUTABFi9IDfJ3tt2072mIIKlaqlT6ZZVAflkbdJhiDg=="
+        length="2049825"
+        type="application/octet-stream" />
+    </item>
+  </channel>
+</rss>
