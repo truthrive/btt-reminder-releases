@@ -6,15 +6,15 @@
     <description>Most recent updates for BTT Reminder.</description>
     <language>en</language>
     <item>
-      <title>Version 1.0.2</title>
-      <sparkle:releaseNotesLink>https://raw.githubusercontent.com/truthrive/btt-reminder-releases/main/release-notes-1.0.2.html</sparkle:releaseNotesLink>
-      <pubDate>Sun, 16 Aug 2026 09:04:52 +0000</pubDate>
+      <title>Version 1.0.3</title>
+      <sparkle:releaseNotesLink>https://raw.githubusercontent.com/truthrive/btt-reminder-releases/main/release-notes-1.0.3.html</sparkle:releaseNotesLink>
+      <pubDate>Sun, 16 Aug 2026 09:35:31 +0000</pubDate>
       <enclosure
-        url="https://github.com/truthrive/btt-reminder-releases/releases/download/v1.0.2/BTT-Reminder-1.0.2.zip"
-        sparkle:version="3"
-        sparkle:shortVersionString="1.0.2"
-        sparkle:edSignature="LmCRyGdmbLAzs9EBoRryoMy1od4FF3IbIyoplXmb49GBf/hVb8iadGsKi53tFGFgMmMIYsyiJDzH5r8XufwbBA=="
-        length="2310407"
+        url="https://github.com/truthrive/btt-reminder-releases/releases/download/v1.0.3/BTT-Reminder-1.0.3.zip"
+        sparkle:version="4"
+        sparkle:shortVersionString="1.0.3"
+        sparkle:edSignature="44si4Y+1sppRCs/wZqq9RFJ92zJ1EXexD/EPY8znVCSq2apo5hyWzX7lMHnqBsakxLytcYFYnWK8Ax2RHz7UBQ=="
+        length="2358705"
         type="application/octet-stream" />
     </item>
   </channel>
