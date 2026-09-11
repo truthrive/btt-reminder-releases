@@ -414,14 +414,75 @@ EOF
           ZIP_NAME: ${{ steps.sign_step.outputs.zip_name }}
         run: |
           echo "Verifying local appcast.xml..."
-          grep -q "sparkle:version=\"${BUILD}\"" appcast.xml || { echo "Error: appcast.xml missing sparkle:version=${BUILD}" >&2; exit 1; }
-          grep -q "sparkle:shortVersionString=\"${VERSION}\"" appcast.xml || { echo "Error: appcast.xml missing sparkle:shortVersionString=${VERSION}" >&2; exit 1; }
-          grep -q 'sparkle:version="8"' appcast.xml || { echo "Error: previous v1.0.7 (build 8) was deleted from appcast.xml!" >&2; exit 1; }
-          echo "Appcast validation passed: v${VERSION} (build ${BUILD}) published and v1.0.7 preserved."
+          grep -q "sparkle:version=\"${BUILD}\"" appcast.xml || { echo "Error: local appcast.xml missing sparkle:version=${BUILD}" >&2; exit 1; }
+          grep -q "sparkle:shortVersionString=\"${VERSION}\"" appcast.xml || { echo "Error: local appcast.xml missing sparkle:shortVersionString=${VERSION}" >&2; exit 1; }
+          grep -q 'sparkle:version="8"' appcast.xml || { echo "Error: previous v1.0.7 (build 8) was deleted from local appcast.xml!" >&2; exit 1; }
+          grep -q 'sparkle:shortVersionString="1.0.7"' appcast.xml || { echo "Error: previous v1.0.7 was deleted from local appcast.xml!" >&2; exit 1; }
+          echo "Local appcast validation passed."
 
-          echo "Verifying GitHub release..."
+          echo "Verifying GitHub release asset..."
           gh release view "v${VERSION}" --json assets | grep -q "${ZIP_NAME}" || { echo "Error: ${ZIP_NAME} not found in release v${VERSION}" >&2; exit 1; }
           echo "GitHub release asset verified: ${ZIP_NAME} attached to v${VERSION}."
+
+          echo "Verifying remote published appcast feed..."
+          APPCAST_API_URL="https://api.github.com/repos/truthrive/btt-reminder-releases/contents/appcast.xml"
+          APPCAST_RAW_URL="https://raw.githubusercontent.com/truthrive/btt-reminder-releases/main/appcast.xml"
+          REMOTE_FILE=$(mktemp)
+          VERIFIED=false
+
+          for i in $(seq 1 30); do
+            TIMESTAMP=$(date +%s)
+            HTTP_STATUS=$(curl -s -H "Accept: application/vnd.github.raw+json" \
+                                 -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+                                 -H "Cache-Control: no-cache" \
+                                 -o "${REMOTE_FILE}" \
+                                 -w "%{http_code}" \
+                                 "${APPCAST_API_URL}")
+
+            if [ "${HTTP_STATUS}" = "200" ] && \
+               grep -q "sparkle:version=\"${BUILD}\"" "${REMOTE_FILE}" && \
+               grep -q "sparkle:shortVersionString=\"${VERSION}\"" "${REMOTE_FILE}"; then
+              echo "Successfully retrieved and verified remote appcast.xml via GitHub Contents API on attempt ${i}."
+              VERIFIED=true
+              break
+            fi
+
+            # Fallback to raw URL with cache-buster timestamp
+            HTTP_STATUS=$(curl -s -H "Cache-Control: no-cache" \
+                                 -o "${REMOTE_FILE}" \
+                                 -w "%{http_code}" \
+                                 "${APPCAST_RAW_URL}?t=${TIMESTAMP}")
+
+            if [ "${HTTP_STATUS}" = "200" ] && \
+               grep -q "sparkle:version=\"${BUILD}\"" "${REMOTE_FILE}" && \
+               grep -q "sparkle:shortVersionString=\"${VERSION}\"" "${REMOTE_FILE}"; then
+              echo "Successfully retrieved and verified remote appcast.xml via raw URL on attempt ${i}."
+              VERIFIED=true
+              break
+            fi
+
+            echo "Attempt ${i}/30: Remote appcast not updated yet (HTTP ${HTTP_STATUS}), retrying in 3s..."
+            sleep 3
+          done
+
+          if [ "${VERIFIED}" != "true" ]; then
+            echo "Error: Remote appcast could not be verified after 30 attempts!" >&2
+            echo "Last response from remote:" >&2
+            cat "${REMOTE_FILE}" >&2
+            rm -f "${REMOTE_FILE}"
+            exit 1
+          fi
+
+          echo "Validating full required contents of remote appcast..."
+          grep -q "sparkle:version=\"${BUILD}\"" "${REMOTE_FILE}" || { echo "Error: Remote appcast missing sparkle:version=\"${BUILD}\"" >&2; exit 1; }
+          grep -q "sparkle:shortVersionString=\"${VERSION}\"" "${REMOTE_FILE}" || { echo "Error: Remote appcast missing sparkle:shortVersionString=\"${VERSION}\"" >&2; exit 1; }
+          grep -q 'sparkle:version="8"' "${REMOTE_FILE}" || { echo "Error: Remote appcast missing previous sparkle:version=\"8\"" >&2; exit 1; }
+          grep -q 'sparkle:shortVersionString="1.0.7"' "${REMOTE_FILE}" || { echo "Error: Remote appcast missing previous sparkle:shortVersionString=\"1.0.7\"" >&2; exit 1; }
+          grep -q 'sparkle:edSignature="' "${REMOTE_FILE}" || { echo "Error: Remote appcast missing sparkle:edSignature" >&2; exit 1; }
+          grep -q 'length="' "${REMOTE_FILE}" || { echo "Error: Remote appcast missing length attribute" >&2; exit 1; }
+
+          rm -f "${REMOTE_FILE}"
+          echo "Remote appcast verification successfully completed: version ${VERSION} (build ${BUILD}) active and previous v1.0.7 preserved."
 
       - name: Upload Release Artifacts
         uses: actions/upload-artifact@v4
