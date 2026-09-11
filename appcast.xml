@@ -6,6 +6,23 @@
     <description>Most recent updates for BTT Reminder.</description>
     <language>en</language>
     <item>
+    <title>Version 1.0.8</title>
+
+    <sparkle:version>9</sparkle:version>
+    <sparkle:shortVersionString>1.0.8</sparkle:shortVersionString>
+
+    <sparkle:informationalUpdate />
+
+    <pubDate>Fri, 11 Sep 2026 12:30:00 +0000</pubDate>
+
+    <link>https://github.com/truthrive/btt-reminder-releases</link>
+
+    <description><![CDATA[
+        <h2>BTT Reminder 1.0.8</h2>
+        <p>Kiểm tra hệ thống cập nhật tự động 🌸</p>
+    ]]></description>
+</item>
+    <item>
       <title>Version 1.0.7</title>
       <sparkle:releaseNotesLink>https://raw.githubusercontent.com/truthrive/btt-reminder-releases/main/release-notes-1.0.7.html</sparkle:releaseNotesLink>
       <pubDate>Sun, 16 Aug 2026 15:33:30 +0000</pubDate>
