@@ -32,6 +32,18 @@ jobs:
           token: ${{ secrets.SOURCE_REPO_PAT }}
           path: source
           fetch-depth: 0
+          clean: true
+
+      - name: Sanitize Locked Source Checkout
+        run: |
+          cd source
+          git reset --hard "${SOURCE_SHA}"
+          git clean -ffdx
+
+          ACTUAL_SHA=$(git rev-parse HEAD)
+          test "${ACTUAL_SHA}" = "${SOURCE_SHA}" || { echo "Error: source SHA changed during cleanup" >&2; exit 1; }
+          test ! -e Tests/BTTCoreTests/PreV2BridgeBackupTests.swift || { echo "Error: stale PreV2BridgeBackupTests.swift is present" >&2; exit 1; }
+          test -z "$(git status --porcelain)" || { echo "Error: source checkout is not clean" >&2; git status --short >&2; exit 1; }
 
       - name: Validate Source Lock and Version
         run: |
