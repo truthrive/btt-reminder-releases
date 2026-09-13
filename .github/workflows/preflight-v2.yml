@@ -1,0 +1,122 @@
+name: Preflight BTT Reminder V2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: macos-latest
+    env:
+      SOURCE_SHA: e901664566952cb5634a4f014bbc89b0f656cafb
+      EXPECTED_VERSION: 2.0.0
+      EXPECTED_BUILD: "10"
+
+    steps:
+      - name: Check Source Token
+        env:
+          HAS_SOURCE_PAT: ${{ secrets.SOURCE_REPO_PAT != '' }}
+        run: |
+          if [ "${HAS_SOURCE_PAT}" != "true" ]; then
+            echo "Error: Required secret SOURCE_REPO_PAT is missing or empty!" >&2
+            exit 1
+          fi
+
+      - name: Checkout Private Source
+        uses: actions/checkout@v4
+        with:
+          repository: truthrive/btt-reminder
+          ref: ${{ env.SOURCE_SHA }}
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          fetch-depth: 0
+
+      - name: Validate Source Lock and Version
+        run: |
+          cd source
+          ACTUAL_SHA=$(git rev-parse HEAD)
+          test "${ACTUAL_SHA}" = "${SOURCE_SHA}" || { echo "Error: source SHA mismatch" >&2; exit 1; }
+
+          PBX_FILE="BTTReminder.xcodeproj/project.pbxproj"
+          test "$(grep -c "MARKETING_VERSION = ${EXPECTED_VERSION};" "${PBX_FILE}" || true)" -eq 2 || { echo "Error: version mismatch" >&2; exit 1; }
+          test "$(grep -c "CURRENT_PROJECT_VERSION = ${EXPECTED_BUILD};" "${PBX_FILE}" || true)" -eq 2 || { echo "Error: build mismatch" >&2; exit 1; }
+
+          grep -q 'LegacyReminderItemV1.defaultReminders' Sources/BTTCore/Migration/LegacyV1DTOs.swift || { echo "Error: V1 default reminder fallback missing" >&2; exit 1; }
+          test -f Tests/BTTCoreTests/LegacyV1DefaultRemindersTests.swift || { echo "Error: fallback regression tests missing" >&2; exit 1; }
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Resolve Dependencies
+        run: |
+          cd source
+          swift package resolve
+
+      - name: Run SPM Unit Tests
+        run: |
+          cd source
+          swift test --verbose
+
+      - name: Run Xcode Tests
+        run: |
+          cd source
+          xcodebuild test \
+            -project BTTReminder.xcodeproj \
+            -scheme BTTReminder \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES
+
+      - name: Build Release
+        run: |
+          cd source
+          xcodebuild build \
+            -project BTTReminder.xcodeproj \
+            -scheme BTTReminder \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES
+
+      - name: Verify Release App
+        run: |
+          cd source
+          BUILD_DIR=$(xcodebuild -project BTTReminder.xcodeproj -scheme BTTReminder -configuration Release -showBuildSettings | awk -F ' = ' '/TARGET_BUILD_DIR/ {print $2; exit}')
+          APP_PATH="${BUILD_DIR}/BTT Reminder.app"
+          PLIST_PATH="${APP_PATH}/Contents/Info.plist"
+          EXECUTABLE="${APP_PATH}/Contents/MacOS/BTT Reminder"
+
+          test -d "${APP_PATH}" || { echo "Error: app bundle missing" >&2; exit 1; }
+          codesign --force --deep --sign - "${APP_PATH}"
+          codesign --verify --deep --strict --verbose=2 "${APP_PATH}"
+
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "${PLIST_PATH}")
+          BUILD=$(/usr/libexec/PlistBuddy -c "Print CFBundleVersion" "${PLIST_PATH}")
+          FEED_URL=$(/usr/libexec/PlistBuddy -c "Print SUFeedURL" "${PLIST_PATH}")
+          PUBLIC_KEY=$(/usr/libexec/PlistBuddy -c "Print SUPublicEDKey" "${PLIST_PATH}")
+
+          test "${VERSION}" = "${EXPECTED_VERSION}" || { echo "Error: built version mismatch" >&2; exit 1; }
+          test "${BUILD}" = "${EXPECTED_BUILD}" || { echo "Error: built build mismatch" >&2; exit 1; }
+          test "${FEED_URL}" = "https://raw.githubusercontent.com/truthrive/btt-reminder-releases/main/appcast.xml" || { echo "Error: feed URL mismatch" >&2; exit 1; }
+          test -n "${PUBLIC_KEY}" || { echo "Error: Sparkle public key missing" >&2; exit 1; }
+
+          OUTPUT_LOG=$(mktemp)
+          "${EXECUTABLE}" > "${OUTPUT_LOG}" 2>&1 &
+          APP_PID=$!
+          sleep 3
+          if kill -0 "${APP_PID}" 2>/dev/null; then
+            kill -TERM "${APP_PID}" 2>/dev/null || true
+            wait "${APP_PID}" 2>/dev/null || true
+            rm -f "${OUTPUT_LOG}"
+          else
+            cat "${OUTPUT_LOG}" >&2
+            rm -f "${OUTPUT_LOG}"
+            echo "Error: smoke launch failed" >&2
+            exit 1
+          fi
+
+          echo "V2 preflight passed for ${EXPECTED_VERSION} (${EXPECTED_BUILD}) at ${SOURCE_SHA}."
