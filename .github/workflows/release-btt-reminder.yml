@@ -6,7 +6,7 @@ on:
       release_notes:
         description: 'Release summary notes for this version (optional override)'
         required: false
-        default: 'Hotfix for Notes in Version 2: Fixed new-line/Return handling in the Notes editor, Note title editing, rich-text editor state synchronization, and formatting reliability.'
+        default: 'BTT Reminder v2.1.0: Rich structured document editing in Notes with image attachments, Markdown tables, Title/Heading/Subheading block styles, pinned notes, improved checklist interaction, canonical storage layout, and path safety.'
 
 permissions:
   contents: write
@@ -15,9 +15,9 @@ jobs:
   build-and-publish:
     runs-on: macos-latest
     env:
-      SOURCE_SHA: b1c8bcb5b6ee25c22193ce1425615242ddded627
-      EXPECTED_VERSION: 2.0.2
-      EXPECTED_BUILD: "12"
+      SOURCE_SHA: 3f9c6b057866441640c180b691f76510b3f636df
+      EXPECTED_VERSION: 2.1.0
+      EXPECTED_BUILD: "13"
 
     steps:
       - name: Pre-flight Secret Presence Check
