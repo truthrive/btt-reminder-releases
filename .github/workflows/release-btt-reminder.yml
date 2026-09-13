@@ -6,7 +6,7 @@ on:
       release_notes:
         description: 'Release summary notes for this version (optional override)'
         required: false
-        default: 'Version 2 mang đến nhiều cải tiến cho Ghi chú, Tuần, Nhắc nhở và Chuỗi ngày. Dữ liệu từ 1.0.8 được chuyển đổi an toàn sang định dạng mới và giữ bản sao lưu pre-V2 để có thể phục hồi nếu cần. 🌸'
+        default: 'Hotfix for Notes in Version 2: Fixed new-line/Return handling in the Notes editor, Note title editing, rich-text editor state synchronization, and formatting reliability.'
 
 permissions:
   contents: write
@@ -15,9 +15,9 @@ jobs:
   build-and-publish:
     runs-on: macos-latest
     env:
-      SOURCE_SHA: 3865785b237a6fc82faf99e94cf5470170f2a8d2
-      EXPECTED_VERSION: 2.0.0
-      EXPECTED_BUILD: "10"
+      SOURCE_SHA: cc3ffdf778e9f9e40498cdd1f3fcfe234c6d92fe
+      EXPECTED_VERSION: 2.0.1
+      EXPECTED_BUILD: "11"
 
     steps:
       - name: Pre-flight Secret Presence Check
@@ -266,7 +266,16 @@ jobs:
           version = os.environ["VERSION"]
           notes = (os.environ.get("USER_NOTES") or "").strip()
           if not notes:
-              notes = "Version 2 mang đến nhiều cải tiến cho Ghi chú, Tuần, Nhắc nhở và Chuỗi ngày. Dữ liệu từ 1.0.8 được chuyển đổi an toàn sang định dạng mới và giữ bản sao lưu pre-V2 để có thể phục hồi nếu cần. 🌸"
+              items = [
+                  "Fixed new-line/Return handling in the Notes editor.",
+                  "Fixed Note title editing behavior.",
+                  "Fixed rich-text editor state synchronization.",
+                  "Improved formatting/editor reliability.",
+                  "Added regression coverage for Notes editing and persistence."
+              ]
+              notes_html = "<p>Hotfix for Notes in Version 2:</p><ul>" + "".join(f"<li>{item}</li>" for item in items) + "</ul>"
+          else:
+              notes_html = f"<p>{html.escape(notes)}</p>"
 
           html_content = f"""<!DOCTYPE html>
           <html>
@@ -276,11 +285,13 @@ jobs:
             <style>
               body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 16px; color: #333; line-height: 1.5; }}
               h2 {{ color: #d84a75; }}
+              ul {{ padding-left: 20px; }}
+              li {{ margin-bottom: 6px; }}
             </style>
           </head>
           <body>
             <h2>BTT Reminder v{html.escape(version)}</h2>
-            <p>{html.escape(notes)}</p>
+            {notes_html}
           </body>
           </html>
           """
@@ -370,7 +381,7 @@ jobs:
           source_sha = os.environ["SOURCE_SHA"]
           notes = (os.environ.get("USER_NOTES") or "").strip()
           if not notes:
-              notes = "Version 2 mang đến nhiều cải tiến cho Ghi chú, Tuần, Nhắc nhở và Chuỗi ngày. Dữ liệu từ 1.0.8 được chuyển đổi an toàn sang định dạng mới và giữ bản sao lưu pre-V2 để có thể phục hồi nếu cần. 🌸"
+              notes = "Hotfix for Notes in Version 2:\n\n- Fixed new-line/Return handling in the Notes editor.\n- Fixed Note title editing behavior.\n- Fixed rich-text editor state synchronization.\n- Improved formatting/editor reliability.\n- Added regression coverage for Notes editing and persistence."
 
           body = f"BTT Reminder v{version} ({build})\n\n{notes}\n\nVerified Source SHA: `{source_sha}`\n"
           with open("release_body.txt", "w", encoding="utf-8") as f:
@@ -406,6 +417,8 @@ jobs:
           echo "Verifying local appcast.xml..."
           grep -q "sparkle:version=\"${BUILD}\"" appcast.xml || { echo "Error: local appcast missing build ${BUILD}" >&2; exit 1; }
           grep -q "sparkle:shortVersionString=\"${VERSION}\"" appcast.xml || { echo "Error: local appcast missing version ${VERSION}" >&2; exit 1; }
+          grep -q 'sparkle:version="10"' appcast.xml || { echo "Error: v2.0.0 build 10 missing from local appcast" >&2; exit 1; }
+          grep -q 'sparkle:shortVersionString="2.0.0"' appcast.xml || { echo "Error: v2.0.0 missing from local appcast" >&2; exit 1; }
           grep -q 'sparkle:version="9"' appcast.xml || { echo "Error: v1.0.8 build 9 missing from local appcast" >&2; exit 1; }
           grep -q 'sparkle:shortVersionString="1.0.8"' appcast.xml || { echo "Error: v1.0.8 missing from local appcast" >&2; exit 1; }
           grep -q 'sparkle:version="8"' appcast.xml || { echo "Error: v1.0.7 build 8 missing from local appcast" >&2; exit 1; }
@@ -461,6 +474,8 @@ jobs:
 
           grep -q "sparkle:version=\"${BUILD}\"" "${REMOTE_FILE}" || { echo "Error: remote appcast missing build ${BUILD}" >&2; exit 1; }
           grep -q "sparkle:shortVersionString=\"${VERSION}\"" "${REMOTE_FILE}" || { echo "Error: remote appcast missing version ${VERSION}" >&2; exit 1; }
+          grep -q 'sparkle:version="10"' "${REMOTE_FILE}" || { echo "Error: remote appcast missing v2.0.0 build 10" >&2; exit 1; }
+          grep -q 'sparkle:shortVersionString="2.0.0"' "${REMOTE_FILE}" || { echo "Error: remote appcast missing v2.0.0" >&2; exit 1; }
           grep -q 'sparkle:version="9"' "${REMOTE_FILE}" || { echo "Error: remote appcast missing v1.0.8 build 9" >&2; exit 1; }
           grep -q 'sparkle:shortVersionString="1.0.8"' "${REMOTE_FILE}" || { echo "Error: remote appcast missing v1.0.8" >&2; exit 1; }
           grep -q 'sparkle:version="8"' "${REMOTE_FILE}" || { echo "Error: remote appcast missing v1.0.7 build 8" >&2; exit 1; }
