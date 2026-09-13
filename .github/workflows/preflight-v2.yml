@@ -67,10 +67,36 @@ jobs:
           cd source
           swift package resolve
 
-      - name: Run SPM Unit Tests
+      - name: Resolve Dependencies
         run: |
           cd source
-          swift test --verbose
+          swift package resolve
+
+      - name: Run SPM Unit Tests
+        shell: bash
+        run: |
+          set -o pipefail
+          cd source
+
+          set +e
+          swift test --verbose 2>&1 | tee /tmp/swift-test.log
+          status=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$status" -ne 0 ]; then
+            echo ""
+            echo "========== TEST FAILURES =========="
+            grep -E -C 5 \
+              'Test Case .* failed|XCTAssert.*failed|error:.*XCT|failed \(' \
+              /tmp/swift-test.log || true
+            echo "==================================="
+          fi
+
+          exit "$status"
+
+      - name: Run Xcode Tests
+        run: |
+          cd source
 
       - name: Run Xcode Tests
         run: |
