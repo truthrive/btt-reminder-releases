@@ -318,18 +318,20 @@ jobs:
           zip_length = os.environ["ZIP_LENGTH"]
           pub_date = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
 
-          new_item = f"""    <item>
-        <title>Version {version}</title>
-        <sparkle:releaseNotesLink>https://raw.githubusercontent.com/truthrive/btt-reminder-releases/main/release-notes-{version}.html</sparkle:releaseNotesLink>
-        <pubDate>{pub_date}</pubDate>
-        <enclosure
-          url="https://github.com/truthrive/btt-reminder-releases/releases/download/v{version}/BTT-Reminder-{version}.zip"
-          sparkle:version="{build}"
-          sparkle:shortVersionString="{version}"
-          sparkle:edSignature="{ed_sig}"
-          length="{zip_length}"
-          type="application/octet-stream" />
-      </item>"""
+                    new_item = "\n".join([
+              "    <item>",
+              f"      <title>Version {version}</title>",
+              f"      <sparkle:releaseNotesLink>https://raw.githubusercontent.com/truthrive/btt-reminder-releases/main/release-notes-{version}.html</sparkle:releaseNotesLink>",
+              f"      <pubDate>{pub_date}</pubDate>",
+              "      <enclosure",
+              f'        url="https://github.com/truthrive/btt-reminder-releases/releases/download/v{version}/BTT-Reminder-{version}.zip"',
+              f'        sparkle:version="{build}"',
+              f'        sparkle:shortVersionString="{version}"',
+              f'        sparkle:edSignature="{ed_sig}"',
+              f'        length="{zip_length}"',
+              '        type="application/octet-stream" />',
+              "    </item>",
+          ])
 
           with open("appcast.xml", "r", encoding="utf-8") as f:
               content = f.read()
@@ -373,14 +375,14 @@ jobs:
             fi
           else
             echo "Creating GitHub Release v${VERSION}..."
-            cat << 'EOF' > release_body.txt
-BTT Reminder vVERSION_PLACEHOLDER (BUILD_PLACEHOLDER)
-
-Bản cập nhật nhỏ này chuẩn bị dữ liệu an toàn cho bản cập nhật lớn sắp tới.
-Dữ liệu hiện tại của em được giữ nguyên và có thêm một bản sao lưu cục bộ để quá trình nâng cấp yên tâm hơn. 🌸
-
-Verified Source SHA: `SOURCE_SHA_PLACEHOLDER`
-EOF
+                      printf '%s\n' \
+              'BTT Reminder vVERSION_PLACEHOLDER (BUILD_PLACEHOLDER)' \
+              '' \
+              'Bản cập nhật nhỏ này chuẩn bị dữ liệu an toàn cho bản cập nhật lớn sắp tới.' \
+              'Dữ liệu hiện tại của em được giữ nguyên và có thêm một bản sao lưu cục bộ để quá trình nâng cấp yên tâm hơn. 🌸' \
+              '' \
+              'Verified Source SHA: `SOURCE_SHA_PLACEHOLDER`' \
+              > release_body.txt
 
             sed "s|VERSION_PLACEHOLDER|${VERSION}|g" release_body.txt | \
               sed "s|BUILD_PLACEHOLDER|${BUILD}|g" | \
