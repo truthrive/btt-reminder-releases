@@ -10,7 +10,7 @@ jobs:
   preflight:
     runs-on: macos-latest
     env:
-      SOURCE_SHA: c01eeebc3b45259919a95795c07e4012f28f43cd
+      SOURCE_SHA: 2de24381c2fe27d1b71479e12adece9ced0c1243
       EXPECTED_VERSION: 2.0.0
       EXPECTED_BUILD: "10"
 
@@ -67,11 +67,6 @@ jobs:
           cd source
           swift package resolve
 
-      - name: Resolve Dependencies
-        run: |
-          cd source
-          swift package resolve
-
       - name: Run SPM Unit Tests
         shell: bash
         run: |
@@ -93,10 +88,6 @@ jobs:
           fi
 
           exit "$status"
-
-      - name: Run Xcode Tests
-        run: |
-          cd source
 
       - name: Run Xcode Tests
         run: |
