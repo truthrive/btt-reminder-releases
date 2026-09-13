@@ -10,9 +10,9 @@ jobs:
   preflight:
     runs-on: macos-latest
     env:
-      SOURCE_SHA: cc3ffdf778e9f9e40498cdd1f3fcfe234c6d92fe
-      EXPECTED_VERSION: 2.0.1
-      EXPECTED_BUILD: "11"
+      SOURCE_SHA: 0405cc7d1fd05ec9e6664bbb2800186303fbb465
+      EXPECTED_VERSION: 2.0.2
+      EXPECTED_BUILD: "12"
 
     steps:
       - name: Check Source Token
