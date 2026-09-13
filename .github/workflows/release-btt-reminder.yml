@@ -95,12 +95,11 @@ jobs:
           swift package resolve
           cd ..
 
-           - name: Unit Tests - Owner Approved Skip
+      - name: Unit Tests - Owner Approved Skip
         run: |
           echo "Skipping swift test for BTT Reminder 1.0.8 per owner release decision."
           echo "Release remains locked to source SHA 48ac2dbe59c0f321e3b410c0e63a2711d7e73145."
           echo "Build, codesign, smoke launch, Info.plist validation and Sparkle signing will still run."
-
       - name: Build BTT Reminder Release Target
         run: |
           cd source
@@ -318,7 +317,7 @@ jobs:
           zip_length = os.environ["ZIP_LENGTH"]
           pub_date = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
 
-                    new_item = "\n".join([
+          new_item = "\n".join([
               "    <item>",
               f"      <title>Version {version}</title>",
               f"      <sparkle:releaseNotesLink>https://raw.githubusercontent.com/truthrive/btt-reminder-releases/main/release-notes-{version}.html</sparkle:releaseNotesLink>",
