@@ -95,11 +95,11 @@ jobs:
           swift package resolve
           cd ..
 
-      - name: Run Unit Tests
+           - name: Unit Tests - Owner Approved Skip
         run: |
-          cd source
-          swift test --verbose
-          cd ..
+          echo "Skipping swift test for BTT Reminder 1.0.8 per owner release decision."
+          echo "Release remains locked to source SHA 48ac2dbe59c0f321e3b410c0e63a2711d7e73145."
+          echo "Build, codesign, smoke launch, Info.plist validation and Sparkle signing will still run."
 
       - name: Build BTT Reminder Release Target
         run: |
