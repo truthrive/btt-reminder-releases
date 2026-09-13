@@ -15,7 +15,7 @@ jobs:
   build-and-publish:
     runs-on: macos-latest
     env:
-      SOURCE_SHA: e901664566952cb5634a4f014bbc89b0f656cafb
+      SOURCE_SHA: 3865785b237a6fc82faf99e94cf5470170f2a8d2
       EXPECTED_VERSION: 2.0.0
       EXPECTED_BUILD: "10"
 
