@@ -6,7 +6,7 @@ on:
       release_notes:
         description: 'Release summary notes for this version (optional override)'
         required: false
-        default: 'Bản cập nhật nhỏ này chuẩn bị dữ liệu an toàn cho bản cập nhật lớn sắp tới. Dữ liệu hiện tại của em được giữ nguyên và có thêm một bản sao lưu cục bộ để quá trình nâng cấp yên tâm hơn. 🌸'
+        default: 'Version 2 mang đến nhiều cải tiến cho Ghi chú, Tuần, Nhắc nhở và Chuỗi ngày. Dữ liệu từ 1.0.8 được chuyển đổi an toàn sang định dạng mới và giữ bản sao lưu pre-V2 để có thể phục hồi nếu cần. 🌸'
 
 permissions:
   contents: write
@@ -14,6 +14,10 @@ permissions:
 jobs:
   build-and-publish:
     runs-on: macos-latest
+    env:
+      SOURCE_SHA: f1e4605b16efc5211c2c44a4f4a07195413b5b36
+      EXPECTED_VERSION: 2.0.0
+      EXPECTED_BUILD: "10"
 
     steps:
       - name: Pre-flight Secret Presence Check
@@ -23,12 +27,10 @@ jobs:
         run: |
           if [ "${HAS_SOURCE_PAT}" != "true" ]; then
             echo "Error: Required secret SOURCE_REPO_PAT is missing or empty!" >&2
-            echo "Please configure SOURCE_REPO_PAT in repository Settings -> Secrets and variables -> Actions" >&2
             exit 1
           fi
           if [ "${HAS_SPARKLE_KEY}" != "true" ]; then
             echo "Error: Required secret SPARKLE_ED_PRIVATE_KEY is missing or empty!" >&2
-            echo "Please configure SPARKLE_ED_PRIVATE_KEY in repository Settings -> Secrets and variables -> Actions" >&2
             exit 1
           fi
           echo "Pre-flight secret presence check passed."
@@ -47,43 +49,46 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: truthrive/btt-reminder
-          ref: 48ac2dbe59c0f321e3b410c0e63a2711d7e73145
+          ref: ${{ env.SOURCE_SHA }}
           token: ${{ secrets.SOURCE_REPO_PAT }}
           path: source
           fetch-depth: 0
 
-      - name: Validate Source Lock and Version
+      - name: Validate Source Lock, Version and V2 Migration
         run: |
           cd source
           ACTUAL_SHA=$(git rev-parse HEAD)
-          EXPECTED_SHA="48ac2dbe59c0f321e3b410c0e63a2711d7e73145"
 
-          echo "Validating exact source commit SHA..."
-          if [ "${ACTUAL_SHA}" != "${EXPECTED_SHA}" ]; then
-            echo "Error: Checked out SHA ${ACTUAL_SHA} does not match required SHA ${EXPECTED_SHA}" >&2
+          if [ "${ACTUAL_SHA}" != "${SOURCE_SHA}" ]; then
+            echo "Error: Checked out SHA ${ACTUAL_SHA} does not match required SHA ${SOURCE_SHA}" >&2
             exit 1
           fi
           echo "Verified exact private source SHA: ${ACTUAL_SHA}"
 
           PBX_FILE="BTTReminder.xcodeproj/project.pbxproj"
-          if ! grep -q "MARKETING_VERSION = 1.0.8;" "${PBX_FILE}"; then
-            echo "Error: MARKETING_VERSION is not 1.0.8 in ${PBX_FILE}" >&2
+          VERSION_COUNT=$(grep -c "MARKETING_VERSION = ${EXPECTED_VERSION};" "${PBX_FILE}" || true)
+          BUILD_COUNT=$(grep -c "CURRENT_PROJECT_VERSION = ${EXPECTED_BUILD};" "${PBX_FILE}" || true)
+
+          if [ "${VERSION_COUNT}" -ne 2 ]; then
+            echo "Error: Expected exactly 2 MARKETING_VERSION = ${EXPECTED_VERSION} entries, found ${VERSION_COUNT}." >&2
+            exit 1
+          fi
+          if [ "${BUILD_COUNT}" -ne 2 ]; then
+            echo "Error: Expected exactly 2 CURRENT_PROJECT_VERSION = ${EXPECTED_BUILD} entries, found ${BUILD_COUNT}." >&2
             exit 1
           fi
 
-          if ! grep -q "CURRENT_PROJECT_VERSION = 9;" "${PBX_FILE}"; then
-            echo "Error: CURRENT_PROJECT_VERSION is not 9 in ${PBX_FILE}" >&2
-            exit 1
-          fi
+          STORE="Sources/BTTCore/Services/PersistenceStore.swift"
+          MIGRATION="Sources/BTTCore/Migration/MigrationV1ToV2.swift"
+          test -f "${STORE}" || { echo "Error: ${STORE} missing" >&2; exit 1; }
+          test -f "${MIGRATION}" || { echo "Error: ${MIGRATION} missing" >&2; exit 1; }
 
-          # Verify V1 schema remains schemaVersion 1 in both services
-          if ! grep -q "schemaVersion == 1" Sources/BTTCore/Services/PersistenceStore.swift || \
-             ! grep -q "schemaVersion == 1" Sources/BTTCore/Services/PreV2BridgeBackupManager.swift; then
-            echo "Error: V1 schema validation failed!" >&2
-            exit 1
-          fi
+          grep -q 'probe.schemaVersion == 2' "${STORE}" || { echo "Error: V2 schema load path missing" >&2; exit 1; }
+          grep -q 'probe.schemaVersion == 1' "${STORE}" || { echo "Error: V1-to-V2 migration entry path missing" >&2; exit 1; }
+          grep -q 'DataStoreEnvelope(schemaVersion: 2' "${STORE}" || { echo "Error: V2 persistence write path missing" >&2; exit 1; }
+          grep -q 'data_v1.json.bak_pre_v2' "${STORE}" || { echo "Error: pre-V2 immutable backup path missing" >&2; exit 1; }
 
-          echo "Source version and schema validated: 1.0.8 (build 9), schemaVersion == 1."
+          echo "Source validated: ${EXPECTED_VERSION} (build ${EXPECTED_BUILD}), V1 -> V2 migration path present."
           cd ..
 
       - name: Select Xcode
@@ -95,11 +100,24 @@ jobs:
           swift package resolve
           cd ..
 
-      - name: Unit Tests - Owner Approved Skip
+      - name: Run SPM Unit Tests
         run: |
-          echo "Skipping swift test for BTT Reminder 1.0.8 per owner release decision."
-          echo "Release remains locked to source SHA 48ac2dbe59c0f321e3b410c0e63a2711d7e73145."
-          echo "Build, codesign, smoke launch, Info.plist validation and Sparkle signing will still run."
+          cd source
+          swift test --verbose
+          cd ..
+
+      - name: Run Xcode Tests
+        run: |
+          cd source
+          xcodebuild test \
+            -project BTTReminder.xcodeproj \
+            -scheme BTTReminder \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES
+          cd ..
+
       - name: Build BTT Reminder Release Target
         run: |
           cd source
@@ -120,29 +138,30 @@ jobs:
             exit 1
           fi
 
-          echo "Ad-hoc codesigning release app bundle at: ${APP_PATH}"
           codesign --force --deep --sign - "${APP_PATH}"
-          echo "Verifying code signature..."
           codesign --verify --deep --strict --verbose=2 "${APP_PATH}"
-
           echo "App bundle built and codesigned successfully at: ${APP_PATH}"
           cd ..
 
-      - name: Verify App Bundle & Run Smoke Test
+      - name: Verify App Bundle and Run Smoke Test
         run: |
           cd source
           BUILD_DIR=$(xcodebuild -project BTTReminder.xcodeproj -scheme BTTReminder -configuration Release -showBuildSettings | awk -F ' = ' '/TARGET_BUILD_DIR/ {print $2; exit}')
           APP_PATH="${BUILD_DIR}/BTT Reminder.app"
           EXECUTABLE="${APP_PATH}/Contents/MacOS/BTT Reminder"
+          FRAMEWORK_PATH="${APP_PATH}/Contents/Frameworks/BTTCore.framework"
+          SPARKLE_PATH="${APP_PATH}/Contents/Frameworks/Sparkle.framework"
 
-          echo "Smoke-launching executable at: ${EXECUTABLE}"
+          test -d "${FRAMEWORK_PATH}" || { echo "Error: Embedded BTTCore.framework missing" >&2; exit 1; }
+          test -d "${SPARKLE_PATH}" || { echo "Error: Sparkle.framework missing" >&2; exit 1; }
+
           OUTPUT_LOG=$(mktemp)
           "${EXECUTABLE}" > "${OUTPUT_LOG}" 2>&1 &
           APP_PID=$!
           sleep 3
 
           if kill -0 "${APP_PID}" 2>/dev/null; then
-            echo "Smoke launch test passed. Process ${APP_PID} is running."
+            echo "Smoke launch test passed."
             kill -TERM "${APP_PID}" 2>/dev/null || true
             wait "${APP_PID}" 2>/dev/null || true
             rm -f "${OUTPUT_LOG}"
@@ -154,7 +173,7 @@ jobs:
           fi
           cd ..
 
-      - name: Extract & Validate Built Info.plist
+      - name: Extract and Validate Built Info.plist
         id: version_info
         run: |
           cd source
@@ -162,45 +181,36 @@ jobs:
           APP_PATH="${BUILD_DIR}/BTT Reminder.app"
           PLIST_PATH="${APP_PATH}/Contents/Info.plist"
 
-          if [ ! -f "${PLIST_PATH}" ]; then
-            echo "Error: Info.plist missing at ${PLIST_PATH}" >&2
-            exit 1
-          fi
+          test -f "${PLIST_PATH}" || { echo "Error: Info.plist missing at ${PLIST_PATH}" >&2; exit 1; }
 
           VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "${PLIST_PATH}" 2>/dev/null)
           BUILD=$(/usr/libexec/PlistBuddy -c "Print CFBundleVersion" "${PLIST_PATH}" 2>/dev/null)
+          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "${PLIST_PATH}" 2>/dev/null)
           FEED_URL=$(/usr/libexec/PlistBuddy -c "Print SUFeedURL" "${PLIST_PATH}" 2>/dev/null)
           PUBLIC_KEY=$(/usr/libexec/PlistBuddy -c "Print SUPublicEDKey" "${PLIST_PATH}" 2>/dev/null)
           AUTO_CHECKS=$(/usr/libexec/PlistBuddy -c "Print SUEnableAutomaticChecks" "${PLIST_PATH}" 2>/dev/null)
           AUTO_UPDATE=$(/usr/libexec/PlistBuddy -c "Print SUAutomaticallyUpdate" "${PLIST_PATH}" 2>/dev/null)
 
-          echo "CFBundleShortVersionString: ${VERSION}"
-          echo "CFBundleVersion: ${BUILD}"
-          echo "SUFeedURL: ${FEED_URL}"
-          echo "SUPublicEDKey: ${PUBLIC_KEY}"
-          echo "SUEnableAutomaticChecks: ${AUTO_CHECKS}"
-          echo "SUAutomaticallyUpdate: ${AUTO_UPDATE}"
-
-          if [ "${VERSION}" != "1.0.8" ]; then
-            echo "Error: Expected CFBundleShortVersionString 1.0.8, got '${VERSION}'" >&2
+          if [ "${VERSION}" != "${EXPECTED_VERSION}" ]; then
+            echo "Error: Expected version ${EXPECTED_VERSION}, got '${VERSION}'" >&2
             exit 1
           fi
-
-          if [ "${BUILD}" != "9" ]; then
-            echo "Error: Expected CFBundleVersion 9, got '${BUILD}'" >&2
+          if [ "${BUILD}" != "${EXPECTED_BUILD}" ]; then
+            echo "Error: Expected build ${EXPECTED_BUILD}, got '${BUILD}'" >&2
             exit 1
           fi
-
+          if [ "${BUNDLE_ID}" != "com.btt.BTTReminder" ]; then
+            echo "Error: Unexpected bundle identifier '${BUNDLE_ID}'" >&2
+            exit 1
+          fi
           if [ "${FEED_URL}" != "https://raw.githubusercontent.com/truthrive/btt-reminder-releases/main/appcast.xml" ]; then
-            echo "Error: Unexpected SUFeedURL: ${FEED_URL}" >&2
+            echo "Error: Unexpected SUFeedURL '${FEED_URL}'" >&2
             exit 1
           fi
-
           if [ -z "${PUBLIC_KEY}" ]; then
-            echo "Error: SUPublicEDKey is missing in built Info.plist" >&2
+            echo "Error: SUPublicEDKey is missing" >&2
             exit 1
           fi
-
           if [ "${AUTO_CHECKS}" != "true" ] || [ "${AUTO_UPDATE}" != "true" ]; then
             echo "Error: Automatic update settings must be true" >&2
             exit 1
@@ -209,58 +219,40 @@ jobs:
           echo "app_version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "app_build=${BUILD}" >> "$GITHUB_OUTPUT"
           echo "app_path=${APP_PATH}" >> "$GITHUB_OUTPUT"
+          echo "Built Info.plist validated: ${VERSION} (${BUILD})."
           cd ..
 
       - name: Download Official Sparkle Tooling
         run: |
           SPARKLE_VERSION="2.6.4"
-          echo "Downloading official Sparkle CLI tools version ${SPARKLE_VERSION}..."
           mkdir -p /tmp/sparkle_tools
           curl -sSL "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz" -o /tmp/Sparkle.tar.xz
           tar -xf /tmp/Sparkle.tar.xz -C /tmp/sparkle_tools
+          test -x "/tmp/sparkle_tools/bin/sign_update" || { echo "Error: Sparkle sign_update not found" >&2; exit 1; }
 
-          if [ ! -x "/tmp/sparkle_tools/bin/sign_update" ]; then
-            echo "Error: Official Sparkle sign_update binary not found" >&2
-            exit 1
-          fi
-          echo "Sparkle CLI tools verified at /tmp/sparkle_tools/bin"
-
-      - name: Package & Sign Update with Sparkle
+      - name: Package and Sign Update with Sparkle
         id: sign_step
         env:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
           VERSION: ${{ steps.version_info.outputs.app_version }}
           APP_PATH: ${{ steps.version_info.outputs.app_path }}
         run: |
-          if [ -z "${SPARKLE_ED_PRIVATE_KEY}" ]; then
-            echo "Error: Required secret SPARKLE_ED_PRIVATE_KEY is missing or empty! Release cannot proceed unsigned." >&2
-            exit 1
-          fi
+          test -n "${SPARKLE_ED_PRIVATE_KEY}" || { echo "Error: Sparkle private key missing" >&2; exit 1; }
 
           ZIP_NAME="BTT-Reminder-${VERSION}.zip"
-          echo "Packaging update archive: ${ZIP_NAME}"
           ditto -c -k --sequesterRsrc --keepParent "${APP_PATH}" "${ZIP_NAME}"
 
-          # Sparkle sign_update reading private key securely from stdin via pipe
           SIGN_OUTPUT=$(printf '%s' "${SPARKLE_ED_PRIVATE_KEY}" | /tmp/sparkle_tools/bin/sign_update --ed-key-file - "${ZIP_NAME}")
-
-          if [ -z "${SIGN_OUTPUT}" ]; then
-            echo "Error: Sparkle sign_update failed to produce a signature" >&2
-            exit 1
-          fi
-
           ED_SIG=$(echo "${SIGN_OUTPUT}" | grep -o 'sparkle:edSignature="[^"]*"' | cut -d'"' -f2)
           ZIP_LENGTH=$(echo "${SIGN_OUTPUT}" | grep -o 'length="[^"]*"' | cut -d'"' -f2)
 
-          if [ -z "${ED_SIG}" ] || [ -z "${ZIP_LENGTH}" ]; then
-            echo "Error: Failed to parse edSignature or length from Sparkle sign_update output" >&2
-            exit 1
-          fi
+          test -n "${ED_SIG}" || { echo "Error: Sparkle signature missing" >&2; exit 1; }
+          test -n "${ZIP_LENGTH}" || { echo "Error: Sparkle archive length missing" >&2; exit 1; }
 
-          echo "Sparkle signature generated successfully."
           echo "ed_sig=${ED_SIG}" >> "$GITHUB_OUTPUT"
           echo "zip_length=${ZIP_LENGTH}" >> "$GITHUB_OUTPUT"
           echo "zip_name=${ZIP_NAME}" >> "$GITHUB_OUTPUT"
+          echo "Sparkle signature generated successfully."
 
       - name: Generate Release Notes
         env:
@@ -268,12 +260,13 @@ jobs:
           USER_NOTES: ${{ github.event.inputs.release_notes }}
         run: |
           python3 - << 'PYEOF'
+          import html
           import os
 
           version = os.environ["VERSION"]
-          notes = os.environ.get("USER_NOTES")
-          if not notes or not notes.strip():
-              notes = "Bản cập nhật nhỏ này chuẩn bị dữ liệu an toàn cho bản cập nhật lớn sắp tới. Dữ liệu hiện tại của em được giữ nguyên và có thêm một bản sao lưu cục bộ để quá trình nâng cấp yên tâm hơn. 🌸"
+          notes = (os.environ.get("USER_NOTES") or "").strip()
+          if not notes:
+              notes = "Version 2 mang đến nhiều cải tiến cho Ghi chú, Tuần, Nhắc nhở và Chuỗi ngày. Dữ liệu từ 1.0.8 được chuyển đổi an toàn sang định dạng mới và giữ bản sao lưu pre-V2 để có thể phục hồi nếu cần. 🌸"
 
           html_content = f"""<!DOCTYPE html>
           <html>
@@ -286,8 +279,8 @@ jobs:
             </style>
           </head>
           <body>
-            <h2>BTT Reminder v{version}</h2>
-            <p>{notes}</p>
+            <h2>BTT Reminder v{html.escape(version)}</h2>
+            <p>{html.escape(notes)}</p>
           </body>
           </html>
           """
@@ -296,7 +289,6 @@ jobs:
           lines = [line.lstrip() for line in html_content.strip().splitlines()]
           with open(filename, "w", encoding="utf-8") as f:
               f.write("\n".join(lines) + "\n")
-
           print(f"Created {filename} successfully.")
           PYEOF
 
@@ -349,60 +341,57 @@ jobs:
               print(f"Successfully inserted version {version} into empty appcast.xml")
           PYEOF
 
-      - name: Publish Release & Commit Appcast
+      - name: Publish Release and Commit Appcast
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version_info.outputs.app_version }}
           BUILD: ${{ steps.version_info.outputs.app_build }}
           ZIP_NAME: ${{ steps.sign_step.outputs.zip_name }}
-          SOURCE_SHA: "48ac2dbe59c0f321e3b410c0e63a2711d7e73145"
+          USER_NOTES: ${{ github.event.inputs.release_notes }}
         run: |
-          # 1. Clean up private source checkout before any git or release action
           rm -rf source
 
-          # 2. Check idempotency for release tag
           if gh release view "v${VERSION}" >/dev/null 2>&1; then
-            echo "Release v${VERSION} already exists. Checking release body..."
+            echo "Release v${VERSION} already exists. Checking source lock..."
             BODY=$(gh release view "v${VERSION}" --json body -q .body)
             if echo "${BODY}" | grep -q "${SOURCE_SHA}"; then
-              echo "Release v${VERSION} already exists with matching source SHA ${SOURCE_SHA}. Uploading asset if needed..."
               gh release upload "v${VERSION}" "${ZIP_NAME}" --clobber
             else
-              echo "Error: Release v${VERSION} exists but has a different source SHA!" >&2
+              echo "Error: Release v${VERSION} exists with a different source SHA." >&2
               exit 1
             fi
           else
-            echo "Creating GitHub Release v${VERSION}..."
-                      printf '%s\n' \
-              'BTT Reminder vVERSION_PLACEHOLDER (BUILD_PLACEHOLDER)' \
-              '' \
-              'Bản cập nhật nhỏ này chuẩn bị dữ liệu an toàn cho bản cập nhật lớn sắp tới.' \
-              'Dữ liệu hiện tại của em được giữ nguyên và có thêm một bản sao lưu cục bộ để quá trình nâng cấp yên tâm hơn. 🌸' \
-              '' \
-              'Verified Source SHA: `SOURCE_SHA_PLACEHOLDER`' \
-              > release_body.txt
+            python3 - << 'PYEOF'
+          import os
 
-            sed "s|VERSION_PLACEHOLDER|${VERSION}|g" release_body.txt | \
-              sed "s|BUILD_PLACEHOLDER|${BUILD}|g" | \
-              sed "s|SOURCE_SHA_PLACEHOLDER|${SOURCE_SHA}|g" > final_body.txt
+          version = os.environ["VERSION"]
+          build = os.environ["BUILD"]
+          source_sha = os.environ["SOURCE_SHA"]
+          notes = (os.environ.get("USER_NOTES") or "").strip()
+          if not notes:
+              notes = "Version 2 mang đến nhiều cải tiến cho Ghi chú, Tuần, Nhắc nhở và Chuỗi ngày. Dữ liệu từ 1.0.8 được chuyển đổi an toàn sang định dạng mới và giữ bản sao lưu pre-V2 để có thể phục hồi nếu cần. 🌸"
+
+          body = f"BTT Reminder v{version} ({build})\n\n{notes}\n\nVerified Source SHA: `{source_sha}`\n"
+          with open("release_body.txt", "w", encoding="utf-8") as f:
+              f.write(body)
+          PYEOF
 
             gh release create "v${VERSION}" "${ZIP_NAME}" \
               --title "BTT Reminder v${VERSION}" \
-              --notes-file final_body.txt
-            rm -f release_body.txt final_body.txt
+              --notes-file release_body.txt
+            rm -f release_body.txt
           fi
 
-          # 3. Commit updated appcast.xml and release notes to main branch
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
           git add appcast.xml "release-notes-${VERSION}.html"
+
           if git diff --staged --quiet; then
-            echo "No changes to commit."
+            echo "No appcast/release-note changes to commit."
           else
             git commit -m "release: publish v${VERSION} (build ${BUILD}) [source: ${SOURCE_SHA:0:7}]"
-            git pull --rebase origin main || true
+            git pull --rebase origin main
             git push origin main
           fi
 
@@ -415,17 +404,17 @@ jobs:
           ZIP_NAME: ${{ steps.sign_step.outputs.zip_name }}
         run: |
           echo "Verifying local appcast.xml..."
-          grep -q "sparkle:version=\"${BUILD}\"" appcast.xml || { echo "Error: local appcast.xml missing sparkle:version=${BUILD}" >&2; exit 1; }
-          grep -q "sparkle:shortVersionString=\"${VERSION}\"" appcast.xml || { echo "Error: local appcast.xml missing sparkle:shortVersionString=${VERSION}" >&2; exit 1; }
-          grep -q 'sparkle:version="8"' appcast.xml || { echo "Error: previous v1.0.7 (build 8) was deleted from local appcast.xml!" >&2; exit 1; }
-          grep -q 'sparkle:shortVersionString="1.0.7"' appcast.xml || { echo "Error: previous v1.0.7 was deleted from local appcast.xml!" >&2; exit 1; }
-          echo "Local appcast validation passed."
+          grep -q "sparkle:version=\"${BUILD}\"" appcast.xml || { echo "Error: local appcast missing build ${BUILD}" >&2; exit 1; }
+          grep -q "sparkle:shortVersionString=\"${VERSION}\"" appcast.xml || { echo "Error: local appcast missing version ${VERSION}" >&2; exit 1; }
+          grep -q 'sparkle:version="9"' appcast.xml || { echo "Error: v1.0.8 build 9 missing from local appcast" >&2; exit 1; }
+          grep -q 'sparkle:shortVersionString="1.0.8"' appcast.xml || { echo "Error: v1.0.8 missing from local appcast" >&2; exit 1; }
+          grep -q 'sparkle:version="8"' appcast.xml || { echo "Error: v1.0.7 build 8 missing from local appcast" >&2; exit 1; }
+          grep -q 'sparkle:shortVersionString="1.0.7"' appcast.xml || { echo "Error: v1.0.7 missing from local appcast" >&2; exit 1; }
 
-          echo "Verifying GitHub release asset..."
-          gh release view "v${VERSION}" --json assets | grep -q "${ZIP_NAME}" || { echo "Error: ${ZIP_NAME} not found in release v${VERSION}" >&2; exit 1; }
-          echo "GitHub release asset verified: ${ZIP_NAME} attached to v${VERSION}."
+          gh release view "v${VERSION}" --json assets | grep -q "${ZIP_NAME}" || { echo "Error: ${ZIP_NAME} missing from release v${VERSION}" >&2; exit 1; }
+          BODY=$(gh release view "v${VERSION}" --json body -q .body)
+          echo "${BODY}" | grep -q "${SOURCE_SHA}" || { echo "Error: release body source SHA mismatch" >&2; exit 1; }
 
-          echo "Verifying remote published appcast feed..."
           APPCAST_API_URL="https://api.github.com/repos/truthrive/btt-reminder-releases/contents/appcast.xml"
           APPCAST_RAW_URL="https://raw.githubusercontent.com/truthrive/btt-reminder-releases/main/appcast.xml"
           REMOTE_FILE=$(mktemp)
@@ -443,12 +432,10 @@ jobs:
             if [ "${HTTP_STATUS}" = "200" ] && \
                grep -q "sparkle:version=\"${BUILD}\"" "${REMOTE_FILE}" && \
                grep -q "sparkle:shortVersionString=\"${VERSION}\"" "${REMOTE_FILE}"; then
-              echo "Successfully retrieved and verified remote appcast.xml via GitHub Contents API on attempt ${i}."
               VERIFIED=true
               break
             fi
 
-            # Fallback to raw URL with cache-buster timestamp
             HTTP_STATUS=$(curl -s -H "Cache-Control: no-cache" \
                                  -o "${REMOTE_FILE}" \
                                  -w "%{http_code}" \
@@ -457,33 +444,32 @@ jobs:
             if [ "${HTTP_STATUS}" = "200" ] && \
                grep -q "sparkle:version=\"${BUILD}\"" "${REMOTE_FILE}" && \
                grep -q "sparkle:shortVersionString=\"${VERSION}\"" "${REMOTE_FILE}"; then
-              echo "Successfully retrieved and verified remote appcast.xml via raw URL on attempt ${i}."
               VERIFIED=true
               break
             fi
 
-            echo "Attempt ${i}/30: Remote appcast not updated yet (HTTP ${HTTP_STATUS}), retrying in 3s..."
+            echo "Attempt ${i}/30: remote appcast not updated yet (HTTP ${HTTP_STATUS}); retrying in 3s..."
             sleep 3
           done
 
           if [ "${VERIFIED}" != "true" ]; then
-            echo "Error: Remote appcast could not be verified after 30 attempts!" >&2
-            echo "Last response from remote:" >&2
+            echo "Error: remote appcast could not be verified after 30 attempts" >&2
             cat "${REMOTE_FILE}" >&2
             rm -f "${REMOTE_FILE}"
             exit 1
           fi
 
-          echo "Validating full required contents of remote appcast..."
-          grep -q "sparkle:version=\"${BUILD}\"" "${REMOTE_FILE}" || { echo "Error: Remote appcast missing sparkle:version=\"${BUILD}\"" >&2; exit 1; }
-          grep -q "sparkle:shortVersionString=\"${VERSION}\"" "${REMOTE_FILE}" || { echo "Error: Remote appcast missing sparkle:shortVersionString=\"${VERSION}\"" >&2; exit 1; }
-          grep -q 'sparkle:version="8"' "${REMOTE_FILE}" || { echo "Error: Remote appcast missing previous sparkle:version=\"8\"" >&2; exit 1; }
-          grep -q 'sparkle:shortVersionString="1.0.7"' "${REMOTE_FILE}" || { echo "Error: Remote appcast missing previous sparkle:shortVersionString=\"1.0.7\"" >&2; exit 1; }
-          grep -q 'sparkle:edSignature="' "${REMOTE_FILE}" || { echo "Error: Remote appcast missing sparkle:edSignature" >&2; exit 1; }
-          grep -q 'length="' "${REMOTE_FILE}" || { echo "Error: Remote appcast missing length attribute" >&2; exit 1; }
+          grep -q "sparkle:version=\"${BUILD}\"" "${REMOTE_FILE}" || { echo "Error: remote appcast missing build ${BUILD}" >&2; exit 1; }
+          grep -q "sparkle:shortVersionString=\"${VERSION}\"" "${REMOTE_FILE}" || { echo "Error: remote appcast missing version ${VERSION}" >&2; exit 1; }
+          grep -q 'sparkle:version="9"' "${REMOTE_FILE}" || { echo "Error: remote appcast missing v1.0.8 build 9" >&2; exit 1; }
+          grep -q 'sparkle:shortVersionString="1.0.8"' "${REMOTE_FILE}" || { echo "Error: remote appcast missing v1.0.8" >&2; exit 1; }
+          grep -q 'sparkle:version="8"' "${REMOTE_FILE}" || { echo "Error: remote appcast missing v1.0.7 build 8" >&2; exit 1; }
+          grep -q 'sparkle:shortVersionString="1.0.7"' "${REMOTE_FILE}" || { echo "Error: remote appcast missing v1.0.7" >&2; exit 1; }
+          grep -q 'sparkle:edSignature="' "${REMOTE_FILE}" || { echo "Error: remote appcast missing Sparkle signature" >&2; exit 1; }
+          grep -q 'length="' "${REMOTE_FILE}" || { echo "Error: remote appcast missing archive length" >&2; exit 1; }
 
           rm -f "${REMOTE_FILE}"
-          echo "Remote appcast verification successfully completed: version ${VERSION} (build ${BUILD}) active and previous v1.0.7 preserved."
+          echo "Published output verified: ${VERSION} (${BUILD}); v1.0.8 and v1.0.7 preserved."
 
       - name: Upload Release Artifacts
         uses: actions/upload-artifact@v4
