@@ -6,7 +6,7 @@ on:
       release_notes:
         description: 'Release summary notes for this version (optional override)'
         required: false
-        default: 'BTT Reminder v2.3.0: Improved image handling in Notes with responsive sizing, image resize presets and custom resizing, left/center/right alignment, captions, image import from Mac, image replacement and deletion, safer attachment handling, and improved image editing reliability.'
+        default: 'BTT Reminder v2.3.1: Fixes a Focus Mode rendering issue where the task title could appear repeatedly after a Focus session expired. Also improves Focus expiration state handling for more stable UI rendering.'
 
 permissions:
   contents: write
@@ -15,9 +15,9 @@ jobs:
   build-and-publish:
     runs-on: macos-latest
     env:
-      SOURCE_SHA: d962ce10cccb63978b8a0d012f830c7202025b33
-      EXPECTED_VERSION: 2.3.0
-      EXPECTED_BUILD: "15"
+      SOURCE_SHA: c03f8ee4ca50d1943e20d07201616d29b79a99b3
+      EXPECTED_VERSION: 2.3.1
+      EXPECTED_BUILD: "16"
 
     steps:
       - name: Pre-flight Secret Presence Check
