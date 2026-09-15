@@ -6,7 +6,7 @@ on:
       release_notes:
         description: 'Release summary notes for this version (optional override)'
         required: false
-        default: 'BTT Reminder v2.3.1: Fixes a Focus Mode rendering issue where the task title could appear repeatedly after a Focus session expired. Also improves Focus expiration state handling for more stable UI rendering.'
+        default: 'BTT Reminder 2.4 — Big Update 🌸&#10;&#10;Dynamic Messages&#10;- More varied and natural care messages.&#10;- Smarter context-aware routine notifications.&#10;- Reliable offline/static fallback.&#10;&#10;A New Look&#10;- New BTT Reminder application icon.&#10;- New companion mascot across Care and key quiet moments.&#10;- Refined visual hierarchy.&#10;&#10;Native Motion&#10;- Todo completion animations.&#10;- Focus state feedback.&#10;- Streak and Reward micro-interactions.&#10;- Built with native SwiftUI + SF Symbols effects.&#10;&#10;Under the Hood&#10;- Safer AI message scheduling.&#10;- Better duplicate prevention.&#10;- More resilient notification state.&#10;- Privacy-sensitive context handling.'
 
 permissions:
   contents: write
@@ -15,9 +15,9 @@ jobs:
   build-and-publish:
     runs-on: macos-latest
     env:
-      SOURCE_SHA: c03f8ee4ca50d1943e20d07201616d29b79a99b3
-      EXPECTED_VERSION: 2.3.1
-      EXPECTED_BUILD: "16"
+      SOURCE_SHA: c712e4fcf125f4af1c2d12c7edacd5ea133aa8f1
+      EXPECTED_VERSION: 2.4.0
+      EXPECTED_BUILD: "17"
 
     steps:
       - name: Pre-flight Secret Presence Check
@@ -265,17 +265,11 @@ jobs:
 
           version = os.environ["VERSION"]
           notes = (os.environ.get("USER_NOTES") or "").strip()
-          if not notes:
-              items = [
-                  "Fixed new-line/Return handling in the Notes editor.",
-                  "Fixed Note title editing behavior.",
-                  "Fixed rich-text editor state synchronization.",
-                  "Improved formatting/editor reliability.",
-                  "Added regression coverage for Notes editing and persistence."
-              ]
-              notes_html = "<p>Hotfix for Notes in Version 2:</p><ul>" + "".join(f"<li>{item}</li>" for item in items) + "</ul>"
+          if notes:
+              paras = [f"<p>{html.escape(p).replace(chr(10), '<br>')}</p>" for p in notes.split("\n\n")]
+              notes_html = "".join(paras)
           else:
-              notes_html = f"<p>{html.escape(notes)}</p>"
+              notes_html = "<h3>Dynamic Messages</h3><ul><li>More varied and natural care messages.</li><li>Smarter context-aware routine notifications.</li><li>Reliable offline/static fallback.</li></ul><h3>A New Look</h3><ul><li>New BTT Reminder application icon.</li><li>New companion mascot across Care and key quiet moments.</li><li>Refined visual hierarchy.</li></ul><h3>Native Motion</h3><ul><li>Todo completion animations.</li><li>Focus state feedback.</li><li>Streak and Reward micro-interactions.</li><li>Built with native SwiftUI + SF Symbols effects.</li></ul><h3>Under the Hood</h3><ul><li>Safer AI message scheduling.</li><li>Better duplicate prevention.</li><li>More resilient notification state.</li><li>Privacy-sensitive context handling.</li></ul>"
 
           html_content = f"""<!DOCTYPE html>
           <html>
@@ -381,7 +375,7 @@ jobs:
           source_sha = os.environ["SOURCE_SHA"]
           notes = (os.environ.get("USER_NOTES") or "").strip()
           if not notes:
-              notes = "Hotfix for Notes in Version 2:\n\n- Fixed new-line/Return handling in the Notes editor.\n- Fixed Note title editing behavior.\n- Fixed rich-text editor state synchronization.\n- Improved formatting/editor reliability.\n- Added regression coverage for Notes editing and persistence."
+              notes = "BTT Reminder 2.4 — Big Update 🌸\n\nDynamic Messages\n- More varied and natural care messages.\n- Smarter context-aware routine notifications.\n- Reliable offline/static fallback.\n\nA New Look\n- New BTT Reminder application icon.\n- New companion mascot across Care and key quiet moments.\n- Refined visual hierarchy.\n\nNative Motion\n- Todo completion animations.\n- Focus state feedback.\n- Streak and Reward micro-interactions.\n- Built with native SwiftUI + SF Symbols effects.\n\nUnder the Hood\n- Safer AI message scheduling.\n- Better duplicate prevention.\n- More resilient notification state.\n- Privacy-sensitive context handling."
 
           body = f"BTT Reminder v{version} ({build})\n\n{notes}\n\nVerified Source SHA: `{source_sha}`\n"
           with open("release_body.txt", "w", encoding="utf-8") as f:
