@@ -10,7 +10,7 @@ jobs:
   preflight:
     runs-on: macos-latest
     env:
-      SOURCE_SHA: 6ed4a454f08ad911bdf31cfc5d4cc7ac14393a6e
+      SOURCE_SHA: b5b9e58124545d1a9df4f58e88ad743b5805e6d6
       EXPECTED_VERSION: 2.4.0
       EXPECTED_BUILD: "17"
 
