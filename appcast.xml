@@ -6,6 +6,18 @@
     <description>Most recent updates for BTT Reminder.</description>
     <language>en</language>
     <item>
+      <title>Version 2.4.0</title>
+      <sparkle:releaseNotesLink>https://raw.githubusercontent.com/truthrive/btt-reminder-releases/main/release-notes-2.4.0.html</sparkle:releaseNotesLink>
+      <pubDate>Tue, 15 Sep 2026 04:34:41 +0000</pubDate>
+      <enclosure
+        url="https://github.com/truthrive/btt-reminder-releases/releases/download/v2.4.0/BTT-Reminder-2.4.0.zip"
+        sparkle:version="17"
+        sparkle:shortVersionString="2.4.0"
+        sparkle:edSignature="IFHk4AUkcJpl5PE9NL65OXkEyq+/EwqP5FwDnNE2me3JgP+mgfyOzO3V/5IBtadTZGOWmr2h3xOLf87TAqrIDw=="
+        length="8922997"
+        type="application/octet-stream" />
+    </item>
+    <item>
       <title>Version 2.3.1</title>
       <sparkle:releaseNotesLink>https://raw.githubusercontent.com/truthrive/btt-reminder-releases/main/release-notes-2.3.1.html</sparkle:releaseNotesLink>
       <pubDate>Mon, 14 Sep 2026 09:12:03 +0000</pubDate>
