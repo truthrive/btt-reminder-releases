@@ -15,9 +15,9 @@ jobs:
   build-and-publish:
     runs-on: macos-latest
     env:
-      SOURCE_SHA: c712e4fcf125f4af1c2d12c7edacd5ea133aa8f1
-      EXPECTED_VERSION: 2.4.0
-      EXPECTED_BUILD: "17"
+      SOURCE_SHA: 67eb0d98ac0203c26362af16501c347182421fd4
+      EXPECTED_VERSION: 2.4.1
+      EXPECTED_BUILD: "18"
 
     steps:
       - name: Pre-flight Secret Presence Check
